@@ -26,7 +26,7 @@ class Window(QWidget):
         mylayout.addWidget(globalwg)
         self.setLayout(mylayout)  # 窗体本体设置全局布局
         names = [('%s' % i) for i in range(1, 21)]  # 电梯按钮编号
-        positions = [(i, j) for j in range(2) for i in range(10)]  # 按钮对应的位置
+        positions = [(i, j) for i in range(10) for j in range(2) ]  # 按钮对应的位置
         nameforup = [('▲ %s' % i) for i in range(1, 21)]  # 各楼层控制面板的按钮
         namefordown = [('▼ %s' % i) for i in range(1, 21)]
         # -------左侧布局设置----------#
@@ -55,7 +55,10 @@ class Window(QWidget):
         for i in range(4):
             self.lcd = QLCDNumber()
             self.lcd.setObjectName("{0}".format(i + 1))
-            grid.addWidget(self.lcd, 0, 3 * i, 2, 2)
+            grid.addWidget(self.lcd, 0, 3 * i, 1, 2)
+            #间隙
+            self.spacing = QLabel()
+            grid.addWidget(self.spacing, 0, 3 * i + 2, 1, 1)
 
         #电梯内按钮显示
         for m in range(4):
@@ -65,7 +68,7 @@ class Window(QWidget):
                 self.button.setObjectName("floor{0}+{1}".format(m + 1, n))
                 self.button.setFont(QFont("Microsoft JhengHei", 10))
                 self.button.setMaximumHeight(60)  # 按钮最大高度
-                grid.addWidget(self.button, position[0] + 2, position[1] + m * 3)
+                grid.addWidget(self.button, 11 - position[0], position[1] + m * 3)
                 n = n + 1
 
         #暂停按钮
@@ -101,9 +104,9 @@ class ElevatorThread(QThread):
     def run(self):
         while (1):
             if reach_floor_up[self.num - 1] == 1 or reach_floor_down[self.num - 1] == 1:
-                ex.findChild(QPushButton, "open{0}".format(self.num)).setStyleSheet("QPushButton{background-image: url(open.png)}")
-                time.sleep(5)
-                ex.findChild(QPushButton, "open{0}".format(self.num)).setStyleSheet("QPushButton{}")
+                mywindow.findChild(QPushButton, "open{0}".format(self.num)).setText("OPEN")
+                time.sleep(3)
+                mywindow.findChild(QPushButton, "open{0}".format(self.num)).setStyleSheet("QPushButton{}")
                 if(reach_floor_up[self.num - 1]):
                     reach_floor_up[self.num - 1] = 0
                 else:
@@ -112,34 +115,118 @@ class ElevatorThread(QThread):
             time.sleep(1)
 
 def check_change_elev_floor(num):
-    pass
-
-def pause(num):
-    if pause[num - 1] == 1:
-        pause[num - 1] = 0
-        ex.findChild(QPushButton, "pause{0}".format(num)).setText("暂停")
+    if stop[num - 1] == 1:
+        pass
     else:
-        pause[num - 1] = 1
-        ex.findChild(QPushButton, "pause{0}".format(num)).setText("启动")
+        #到达楼道设定的楼层后，需要转向
+        reach_outside_goal_turn = False
+        floor[num - 1] += state[num - 1]
+        mywindow.findChild(QLCDNumber, "{0}".format(num)).display(floor[num - 1])
+
+        # 对来自内部目标的响应与检查
+        reach_inside_goal = not floor[num - 1] in elev_goal_outside_up[num - 1] and not floor[num - 1] in elev_goal_outside_down[num - 1]
+        if floor[num - 1] in elev_goal[num - 1] and reach_inside_goal:
+            if state[num - 1] == 1:
+                reach_floor_up[num - 1] = 1
+            else:
+                reach_floor_down[num - 1] = 1
+            mywindow.findChild(QPushButton, "floor{0}+{1}".format(num, floor[num - 1])).setStyleSheet("QPushButton{}")
+
+
+        # 对来自外部目标的响应与检查
+        if (floor[num - 1] in elev_goal_outside_up and floor[num - 1] in floor[num - 1] in elev_goal[num - 1]):
+            if state[num - 1] == 1:
+                reach_floor_up[num - 1] = 1
+                mywindow.findChild(QPushButton, "up{0}".format(floor[num - 1])).setStyleSheet("QPushButton{}")
+                elev_goal_outside_up.discard(floor[num - 1])
+            elif state[num - 1] == -1 and floor[num - 1] == min(elev_goal[num - 1]):
+                reach_floor_down[num - 1] = 1
+                reach_outside_goal_turn = True
+            elev_goal[num - 1].discard(floor[num - 1])
+            elev_goal_outside_up.discard(floor[num - 1])
+
+        if (floor[num - 1] in elev_goal_outside_down and floor[num - 1] in floor[num - 1] in elev_goal[num - 1]):
+            if state[num - 1] == -1:
+                reach_floor_down[num - 1] = 1
+                mywindow.findChild(QPushButton, "down{0}".format(floor[num - 1])).setStyleSheet("QPushButton{}")
+                elev_goal_outside_down.discard(floor[num - 1])
+            elif state[num - 1] == 1 and floor[num - 1] == max(elev_goal[num - 1]):
+                reach_floor_up[num - 1] = 1
+                reach_outside_goal_turn = True
+            elev_goal[num - 1].discard(floor[num - 1])
+            elev_goal_outside_down.discard(floor[num - 1])
+
+        # 状态改变算法
+        if not reach_outside_goal_turn:
+            if len(list(elev_goal[num - 1])) == 0:
+                state[num - 1] = 0
+            if state[num - 1] == -1 and min(elev_goal[num - 1]) > floor[num - 1]:
+                state[num - 1] = 1
+            if state[num - 1] == 1 and max(elev_goal[num - 1]) < floor[num - 1]:
+                state[num - 1] = -1
+        # 特殊情况处理：当下行时恰好接到来自楼道的上行命令，应该转为上行（下行时同理）
+        else:
+            state[num - 1] = -state[num - 1]
+
+
+def stop(num):
+    if stop[num - 1] == 1:
+        stop[num - 1] = 0
+        mywindow.findChild(QPushButton, "pause{0}".format(num)).setText("启动")
+    else:
+        stop[num - 1] = 1
+        mywindow.findChild(QPushButton, "pause{0}".format(num)).setText("暂停")
+
+def set_goal_inside(elev_num, flr):  # 设定目标楼层(来自电梯内部的请求）
+    mywindow.findChild(QPushButton, "floor{0}+{1}".format(elev_num, flr)).setStyleSheet("QPushButton{background-image: url(background.png)}")
+    elev_goal[elev_num - 1].add(flr)
+
+def set_goal_outside_up(flr): # 设定目标楼层(来自楼道的请求）
+    mywindow.findChild(QPushButton, "up{0}".format(flr)).setStyleSheet("QPushButton{background-image: url(background.png)}")
+    elev_goal_outside_up.add(flr)
+    elev_select = elev_schedule(flr, 0)
+    elev_goal[elev_select].add(flr)
+
+def set_goal_outside_down(flr): # 设定目标楼层(来自楼道的请求）
+    mywindow.findChild(QPushButton, "down{0}".format(flr)).setStyleSheet("QPushButton{background-image: url(background.png)}")
+    elev_goal_outside_down.add(flr)
+    elev_select = elev_schedule(flr, 1)
+    elev_goal[elev_select].add(flr)
+
+#goal_type: 0上升请求 1下降请求
+def elev_schedule(flr, goal_type):
+    priority = []
+    Priority_table = [[[0.2, 1.0], [0.3, 0.5]], [[0.5, 0.3], [1.0, 0.2]]]
+    for i in range(4):
+        if floor[i] == flr:
+            distancePriority = 1000
+        else:
+            distancePriority= abs(flr - floor[i]) / 20
+        if state[i] == 0:
+            statusPriority = 1
+        else:
+            statusPriority = Priority_table[1 - state[i]][goal_type][int(floor[i] > flr)]
+        priority.append(0.7 * distancePriority + 0.3 * statusPriority)
+    return priority.index(min(priority))
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     mywindow = Window()
 
     #电梯状态 停止：0 上升：1 下降：-1
-    elevator_state = []
+    state = []
     for i in range(4):
-        elevator_state.append(0)
+        state.append(0)
 
     #电梯当前的楼层
-    elevator_floor = []
+    floor = []
     for i in range(4):
-        elevator_floor.append(1)
+        floor.append(1)
 
     #电梯是否暂停运行（不再提供服务）
-    pause = []
+    stop = []
     for i in range(4):
-        elevator_floor.append(0)
+        stop.append(0)
 
     #电梯上升时到达目标楼层后应当开门
     reach_floor_up = [0, 0, 0, 0]
@@ -148,16 +235,16 @@ if __name__ == '__main__':
     reach_floor_down = [0, 0, 0, 0]
 
     #楼道里向上的请求
-    floor_request_up = set([])
+    elev_goal_outside_up = set([])
 
     #楼道里向下的请求
-    floor_request_up = set([])
+    elev_goal_outside_down = set([])
 
-    #电梯内用户请求
-    elevator_goal1 = set([])
-    elevator_goal2 = set([])
-    elevator_goal3 = set([])
-    elevator_goal4 = set([])
-    elevator_goal = [elevator_goal1, elevator_goal2, elevator_goal3, elevator_goal4]
+    #电梯的运行目标楼层
+    elev_goal1 = set([])
+    elev_goal2 = set([])
+    elev_goal3 = set([])
+    elev_goal4 = set([])
+    elev_goal = [elev_goal1, elev_goal2, elev_goal3, elev_goal4]
 
     sys.exit(app.exec_())
