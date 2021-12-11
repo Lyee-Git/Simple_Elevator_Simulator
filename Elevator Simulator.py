@@ -128,11 +128,11 @@ class ElevatorThread(QThread):
             if reach_floor_up[self.num - 1] == 1 or reach_floor_down[self.num - 1] == 1:
                 mywindow.findChild(QPushButton, "open{0}".format(self.num)).setText("OPEN")
                 mywindow.findChild(QPushButton, "open{0}".format(self.num)).setStyleSheet("QPushButton{background-image: url(background.png)}")
-                for i in range(40):
+                for i in range(20):
                     if close_door[self.num - 1]:
                         close_door[self.num - 1] = 0
                         break
-                    time.sleep(0.1)
+                    time.sleep(0.2)
                 mywindow.findChild(QPushButton, "open{0}".format(self.num)).setText("")
                 mywindow.findChild(QPushButton, "open{0}".format(self.num)).setStyleSheet("QPushButton{}")
                 if(reach_floor_up[self.num - 1]):
@@ -301,7 +301,7 @@ if __name__ == '__main__':
     #楼道里向下的请求
     elev_goal_outside_down = set([])
 
-    #电梯的运行目标楼层
+    #电梯的全局运行目标楼层（包括来自内部的和楼道中的）
     elev_goal = []
     for i in range (4):
         elev_goal.append(set([]))
